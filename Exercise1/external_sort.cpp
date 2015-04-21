@@ -11,14 +11,16 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#define BUFFER_SIZE (65536) // 4MB in 64-bit numbers
+
 using namespace std;
 
 struct stat fileStat;
+uint64_t buffer_size = 65536; // 4MB in 64-bit numbers
 uint64_t *buffer;
 uint64_t chunkSize;
+uint64_t *inputBuffer;
 uint64_t *outputBuffer;
-uint64_t bfIndex = 0;
+uint64_t readLimit = buffer_size, inputBfIndex = readLimit, outputBfIndex = 0;
 
 
 
@@ -32,47 +34,46 @@ struct my_tuple {
 };
 priority_queue<my_tuple> my_queue;
 
-void print_chunk(uint64_t elements) {
-	uint64_t *temp = buffer;
-	for (uint64_t i=0; i<elements; i++) {
-		cout << temp[i] << endl;
-	}
-}
+// void print_chunk(uint64_t elements) {
+// 	uint64_t *temp = buffer;
+// 	for (uint64_t i=0; i<elements; i++) {
+// 		cout << temp[i] << endl;
+// 	}
+// }
 
 void flush(FILE *outFile) {
-	if (bfIndex > 0) {
-		cout << "FINALLY Writing to file" << endl;
-		unsigned elems = fwrite(outputBuffer, sizeof(uint64_t), bfIndex, outFile);
-		cout << "Wrote " << elems << " elements" << endl;
+	if (outputBfIndex > 0) {
+		fwrite(outputBuffer, sizeof(uint64_t), outputBfIndex, outFile);
 	}
 }
 void write_to_file(FILE * outFile, uint64_t n) {
-	cout << bfIndex << " <---> " << endl;
-	if (bfIndex < BUFFER_SIZE) {
-		outputBuffer[bfIndex++] = n;
+	if (outputBfIndex < buffer_size) {
+		outputBuffer[outputBfIndex++] = n;
 	}
 	else {
-		cout << "Writing to file" << endl;
-		fwrite(outputBuffer, sizeof(uint64_t), BUFFER_SIZE, outFile);
-		memset(outputBuffer, 0, BUFFER_SIZE*sizeof(uint64_t));
-		bfIndex = 0;
-		outputBuffer[bfIndex] = n;
+		fwrite(outputBuffer, sizeof(uint64_t), buffer_size, outFile);
+		memset(outputBuffer, 0, buffer_size*sizeof(uint64_t));
+		outputBfIndex = 1;
+		outputBuffer[0] = n;
 	}
 }
 
 uint64_t* getNextElement(FILE *f) {
-	uint64_t *temp = (uint64_t *) malloc(sizeof(uint64_t));
-	uint64_t e = fread(temp, sizeof(uint64_t), 1, f);
-	if (e==0) return NULL;
-	else return temp;
+	if (inputBfIndex >= readLimit) {
+		memset(inputBuffer, 0, buffer_size*sizeof(uint64_t));
+		inputBfIndex = 0;
+		readLimit = fread(inputBuffer, sizeof(uint64_t), buffer_size, f);
+		if (readLimit==0) return NULL;
+	}
+	return ( inputBuffer + (inputBfIndex++) );
 }
 
 void external_sort(int fdInput, uint64_t size, int fdOutput, uint64_t memSize) {
 
-	cout << "Size of buffer: " << memSize << endl;
+	// cout << "Size of buffer: " << memSize << endl;
 	// Begin sorting
 	chunkSize = (memSize / sizeof(uint64_t));
-	cout << "Size of actual buffer: " << chunkSize << " elements" << endl;
+	// cout << "Size of actual buffer: " << chunkSize << " elements" << endl;
     uint64_t chunk_number;
     if (size < chunkSize)
     	chunk_number = 1;
@@ -80,12 +81,11 @@ void external_sort(int fdInput, uint64_t size, int fdOutput, uint64_t memSize) {
     	chunk_number = (size / chunkSize);
     	if (size % chunkSize != 0) chunk_number++;
     }
-    cout << "Filesize in elements: " << size << endl;
-	cout << "Numbers of chunks: " << chunk_number << endl;
+ //    cout << "Filesize in elements: " << size << endl;
+	// cout << "Numbers of chunks: " << chunk_number << endl;
 
 	// Opening necessary files
 	FILE *inFile = fdopen(fdInput, "r");
-	// FILE *temp_file = fopen("temp.txt", "w");
 	FILE *outFile = fdopen(fdOutput, "w");
 	FILE *files[chunk_number];
 
@@ -102,19 +102,18 @@ void external_sort(int fdInput, uint64_t size, int fdOutput, uint64_t memSize) {
 		s << "tmp" << i;
 		string name = s.str();
 		files[i] = fopen(name.c_str(), "w");
-		cout << "Read " << elements_read << " elements" << endl;
-		// print_chunk(elements_read);
-		//std::sort(buffer, buffer+chunkSize, [](uint64_t a, uint64_t b) {  return a < b; } );
+		std::sort(buffer, buffer+chunkSize, [](uint64_t a, uint64_t b) {  return a < b; } );
 		fwrite(buffer, sizeof(uint64_t), elements_read, files[i]);
 		fclose(files[i]);
 		++i;
 	}
 	free(buffer);
 	fclose(inFile);
-	// fclose(temp_file);
+
 
 	// Merging chunks
-
+	buffer_size = min(buffer_size, chunkSize/2);
+	// cout << "Buffer size is: " << buffer_size << endl;
 	for (uint64_t i=0; i<chunk_number; i++) {
 		std::stringstream s;
 		s << "tmp" << i;
@@ -123,47 +122,56 @@ void external_sort(int fdInput, uint64_t size, int fdOutput, uint64_t memSize) {
 	}
 
 
-	outputBuffer = (uint64_t *) malloc(BUFFER_SIZE*sizeof(uint64_t));
-	memset(outputBuffer, 0, BUFFER_SIZE*sizeof(uint64_t));
+	/* -------------- JUST COPYING -----------------*/
+	// inputBuffer = (uint64_t *) malloc(buffer_size*sizeof(uint64_t));
+	// outputBuffer = (uint64_t *) malloc(buffer_size*sizeof(uint64_t));
+	// memset(inputBuffer, 0, buffer_size*sizeof(uint64_t));
+	// memset(outputBuffer, 0, buffer_size*sizeof(uint64_t));
+	// for (uint64_t i=0; i<chunk_number; i++) {
+	// 	uint64_t * temp;
+	// 	while ( (temp = getNextElement(files[i]) ) ) {
+	// 		write_to_file(outFile, *temp);
+	// 	}
+
+	// }
+	/* -------------- JUST COPYING -----------------*/
+
+
+	
+	/* -------------- ACTUAL SORTING -----------------*/
+	inputBuffer = (uint64_t *) malloc(buffer_size*sizeof(uint64_t));
 	for (uint64_t i=0; i<chunk_number; i++) {
-		uint64_t * temp;
-		while ( (temp = getNextElement(files[i]) ) ) {
-			write_to_file(outFile, *temp);
+		uint64_t *temp = getNextElement(files[i]);
+		if (temp) {
+			my_tuple elem = {*temp, i};
+			my_queue.push(elem);
 		}
 
-	}
+	}	
+
 	
-	// for (uint64_t i=0; i<chunk_number; i++) {
-	// 	uint64_t *temp = getNextElement(files[i]);
-	// 	if (temp) {
-	// 		my_tuple elem = {*temp, i};
-	// 		my_queue.push(elem);
-	// 		free(temp);
-	// 	}
-
-	// }	
-
-	// outputBuffer = (uint64_t *) malloc(BUFFER_SIZE*sizeof(uint64_t));
-	// memset(outputBuffer, 0, BUFFER_SIZE*sizeof(uint64_t));
-	// my_tuple temp;
-	// while (!my_queue.empty()) {
-	// 	// Remove min element
-	// 	temp = my_queue.top();
-	// 	my_queue.pop();
+	outputBuffer = (uint64_t *) malloc(buffer_size*sizeof(uint64_t));
+	memset(outputBuffer, 0, buffer_size*sizeof(uint64_t));
+	my_tuple temp;
+	while (!my_queue.empty()) {
+		// Remove min element
+		temp = my_queue.top();
+		my_queue.pop();
 		
-	// 	// Write it to output file
-	// 	write_to_file(outFile, temp.num);
+		// Write it to output file
+		write_to_file(outFile, temp.num);
 		
-	// 	// Bring next element from input file piece 
-	// 	uint64_t *t = getNextElement(files[temp.i]);
-	// 	if (t) {
-	// 		my_tuple elem = {*t, temp.i};
-	// 		my_queue.push(elem);
-	// 		free(t);
-	// 	}
-	// }
+		// Bring next element from input file piece 
+		uint64_t *t = getNextElement(files[temp.i]);
+		if (t) {
+			my_tuple elem = {*t, temp.i};
+			my_queue.push(elem);
+		}
+	}
+	/* -------------- ACTUAL SORTING -----------------*/
 	
 	flush(outFile);
+	free(inputBuffer);
 	free(outputBuffer);
 	for (uint64_t i=0; i<chunk_number; i++) {
 		fclose(files[i]);

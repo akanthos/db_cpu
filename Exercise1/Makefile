@@ -9,16 +9,16 @@ CC = g++
 CFLAGS = -Wall -O1 -g -std=c++11
 BINPATH = ../bin/
 
-all: test gen
+all: sort gen
 
-test: test.o external_sort.o
-	$(CC) -o ../bin/test test.o external_sort.o
+sort: sort.o external_sort.o
+	$(CC) -o ../bin/sort sort.o external_sort.o
 
 gen: gen.o
 	$(CC) -o ../bin/gen gen.o
 
-test.o: test.cpp
-	$(CC) $(CFLAGS) -o test.o -c test.cpp
+sort.o: sort.cpp
+	$(CC) $(CFLAGS) -o sort.o -c sort.cpp
 
 gen.o: gen.cpp
 	$(CC) $(CFLAGS) -o gen.o -c gen.cpp
@@ -27,7 +27,7 @@ external_sort.o: external_sort.cpp external_sort.hpp
 	$(CC) $(CFLAGS) -o external_sort.o -c external_sort.cpp
 
 clean:
-	rm -f $(BINPATH)/test $(BINPATH)//gen *.o
+	rm -f $(BINPATH)/sort $(BINPATH)//gen *.o
 
 # scheduler-shell: scheduler-shell.o proc-common.o
 # 	$(CC) -o scheduler-shell scheduler-shell.o proc-common.o
