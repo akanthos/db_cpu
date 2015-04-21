@@ -51,6 +51,8 @@ void write_to_file(FILE * outFile, uint64_t n) {
 		outputBuffer[outputBfIndex++] = n;
 	}
 	else {
+		if (!std::is_sorted(outputBuffer, outputBuffer+buffer_size))
+			cout << "Writing NON-Sorted piecewith size " << buffer_size << endl;
 		fwrite(outputBuffer, sizeof(uint64_t), buffer_size, outFile);
 		memset(outputBuffer, 0, buffer_size*sizeof(uint64_t));
 		outputBfIndex = 1;
